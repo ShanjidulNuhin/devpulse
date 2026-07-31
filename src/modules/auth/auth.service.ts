@@ -39,13 +39,46 @@ const loginUserIntoDB = async (payload: { email: string, password: string }) => 
         name: user.name,
         role: user.role
     }
-    const token = jwt.sign(jwtPayload, config.jwt_secret as string, { expiresIn: `${config.jwt_expire}d` });
+    const token = jwt.sign(jwtPayload, config.jwt_secret as string, { expiresIn: `${config.jwt_expire}d`as any });
     delete user?.password;
 
     return { token, user };
 }
 
+const getUserFromDB = async (id: number) => {
+    const result = await pool.query(`
+        SELECT id, name, email, role, is_active, created_at, updated_at 
+        FROM users WHERE id = $1
+    `, [id]);
+    
+    if (result.rowCount === 0) throw new Error("User not found");
+    return result.rows[0];
+}
+
+const updateUserInDB = async (id: number, payload: Partial<IUser>) => {
+    const { name, role } = payload;
+    const result = await pool.query(`
+        UPDATE users SET 
+        name = COALESCE($1, name), 
+        role = COALESCE($2, role),
+        updated_at = NOW()
+        WHERE id = $3 RETURNING id, name, email, role, updated_at;
+    `, [name, role, id]);
+
+    if (result.rowCount === 0) throw new Error("User not found");
+    return result.rows[0];
+}
+
+const deleteUserFromDB = async (id: number) => {
+    const result = await pool.query(`DELETE FROM users WHERE id = $1`, [id]);
+    if (result.rowCount === 0) throw new Error("User not found");
+    return result;
+}
+
 export const authService = {
     signupUserIntoDB,
-    loginUserIntoDB
+    loginUserIntoDB,
+    getUserFromDB,
+    updateUserInDB,
+    deleteUserFromDB
 }
